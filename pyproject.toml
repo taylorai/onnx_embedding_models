@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+
+[project]
+name = "onnx_embedding_models"
+version="0.0.5"
+authors = [
+    {name = "Benjamin Anderson", email = "ben@trytaylor.ai"},
+]
+description = "Python utility for text embeddings in ONNX."
+readme = "README.md"
+requires-python = ">=3.9"
+keywords = []
+license = {text = ""}
+classifiers = []
+dependencies = [
+    "onnxruntime",
+    "numpy",
+    "transformers",
+    "huggingface_hub"
+]
