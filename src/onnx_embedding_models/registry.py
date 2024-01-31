@@ -39,7 +39,7 @@ registry = {
     },
     # 12 layers, 768-dim
     "bge-base": {
-        "repo": "neuralmagic/bge-small-en-v1.5-quant",
+        "repo": "neuralmagic/bge-base-en-v1.5-quant",
         "path_in_repo": "model.onnx",
         "max_length": 512,
         "pooling_strategy": "cls",
