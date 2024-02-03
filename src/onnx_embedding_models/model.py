@@ -132,7 +132,7 @@ class ONNXEmbeddingModel:
         inputs = self.tokenizer(
             texts,
             truncation=True,
-            padding="longest",
+            padding=False,
             max_length=self.max_length,
         ) # dont return tensors, this adds unnecessary padding
         output_embs = []
