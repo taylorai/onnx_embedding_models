@@ -38,7 +38,7 @@ class ONNXEmbeddingModel:
         """
         import huggingface_hub
         from transformers import AutoTokenizer
-
+        os.makedirs(destination, exist_ok=True)
         with tempfile.TemporaryDirectory() as tmpdir:
             onnx_file = huggingface_hub.hf_hub_download(
                 repo_id=registry[model_id]["repo"],
