@@ -8,7 +8,7 @@ import numpy as np
 from .registry import registry
 
 
-class ONNXEmbeddingModel:
+class EmbeddingModel:
     def __init__(
         self,
         onnx_path: str,
@@ -16,6 +16,8 @@ class ONNXEmbeddingModel:
         max_length: int,
         pooling_strategy: Literal["mean", "first", "cls"],
         normalize: bool,
+        intra_op_num_threads: int = 0,
+        thread_spinning: bool = True,
     ):
         """
         This assumes the model file is already downloaded.
@@ -24,12 +26,44 @@ class ONNXEmbeddingModel:
         """
         import onnxruntime as ort
         from transformers import AutoTokenizer
+        sess_options = ort.SessionOptions()
+        # options to make it faster
+        sess_options.intra_op_num_threads = intra_op_num_threads
+        sess_options.add_session_config_entry(
+            "session.intra_op.allow_spinning",
+            "1" if thread_spinning else "0",
+        )
 
         self.max_length = max_length
         self.pooling_strategy = pooling_strategy
         self.normalize = normalize
         self.session = ort.InferenceSession(onnx_path)
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    
+    @classmethod
+    def from_registry(
+        cls,
+        model_id: str,
+        normalize: bool = True,
+        destination: Optional[str] = None,
+        intra_op_num_threads: int = 0,
+        thread_spinning: bool = True,
+    ):
+        """
+        Downloads a model from the pre-selected registry and returns an instance.
+        """
+        destination = tempfile.mkdtemp() if destination is None else destination
+        cls.download_from_registry(model_id, destination)
+        return cls(
+            os.path.join(destination, "model.onnx"),
+            destination,
+            max_length=registry[model_id]["max_length"],
+            pooling_strategy=registry[model_id]["pooling_strategy"],
+            normalize=normalize,
+            intra_op_num_threads=intra_op_num_threads,
+            thread_spinning=thread_spinning,
+        )
+
 
     @staticmethod
     def download_from_registry(model_id: str, destination: str):
@@ -151,8 +185,13 @@ class ONNXEmbeddingModel:
         
         return output_embs
     
+    def encode(self, texts: list[str], return_numpy=False):
+        return self.embed_batch(texts, return_numpy=return_numpy)
+    
     def __call__(self, texts: list[str], return_numpy=False):
         if isinstance(texts, str):
             return self.embed(texts, return_numpy=return_numpy)
         elif isinstance(texts, list):
             return self.embed_batch(texts, return_numpy=return_numpy)
+        
+ONNXEmbeddingModel = EmbeddingModel

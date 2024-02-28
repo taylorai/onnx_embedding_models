@@ -34,7 +34,7 @@ registry = {
         "repo": "neuralmagic/bge-small-en-v1.5-quant",
         "path_in_repo": "model.onnx",
         "max_length": 512,
-        "pooling_strategy": "cls",
+        "pooling_strategy": "first",
         "ndim": 384,
     },
     # 12 layers, 768-dim
@@ -42,7 +42,7 @@ registry = {
         "repo": "neuralmagic/bge-base-en-v1.5-quant",
         "path_in_repo": "model.onnx",
         "max_length": 512,
-        "pooling_strategy": "cls",
+        "pooling_strategy": "first",
         "ndim": 768,
     },
     # 24 layers, 1024-dim
@@ -50,7 +50,7 @@ registry = {
         "repo": "neuralmagic/bge-large-en-v1.5-quant",
         "path_in_repo": "model.onnx",
         "max_length": 512,
-        "pooling_strategy": "cls",
+        "pooling_strategy": "first",
         "ndim": 1024,
     },
 }
