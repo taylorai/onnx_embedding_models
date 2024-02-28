@@ -72,7 +72,7 @@ class EmbeddingModel:
         """
         import huggingface_hub
         from transformers import AutoTokenizer
-
+        os.makedirs(destination, exist_ok=True)
         with tempfile.TemporaryDirectory() as tmpdir:
             onnx_file = huggingface_hub.hf_hub_download(
                 repo_id=registry[model_id]["repo"],
@@ -166,7 +166,7 @@ class EmbeddingModel:
         inputs = self.tokenizer(
             texts,
             truncation=True,
-            padding="longest",
+            padding=False,
             max_length=self.max_length,
         ) # dont return tensors, this adds unnecessary padding
         output_embs = []
@@ -193,5 +193,6 @@ class EmbeddingModel:
             return self.embed(texts, return_numpy=return_numpy)
         elif isinstance(texts, list):
             return self.embed_batch(texts, return_numpy=return_numpy)
+
         
 ONNXEmbeddingModel = EmbeddingModel
