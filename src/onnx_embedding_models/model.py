@@ -1,4 +1,5 @@
 import os
+import tqdm
 import shutil
 import tempfile
 from typing import Literal, Optional
@@ -162,6 +163,7 @@ class EmbeddingModel:
         self,
         texts: list[str],
         return_numpy: bool = False,
+        show_progress: bool = True,
     ):
         inputs = self.tokenizer(
             texts,
@@ -170,7 +172,7 @@ class EmbeddingModel:
             max_length=self.max_length,
         ) # dont return tensors, this adds unnecessary padding
         output_embs = []
-        for i in range(len(texts)):
+        for i in tqdm.tqdm(range(len(texts)), disable=not show_progress):
             outputs = self.session.run(None, {k: np.array(v[i]).reshape(1, -1) for k, v in inputs.items()})
             if len(outputs) == 2:
                 hidden_states, pooler_output = outputs
@@ -185,8 +187,8 @@ class EmbeddingModel:
         
         return output_embs
     
-    def encode(self, texts: list[str], return_numpy=False):
-        return self.embed_batch(texts, return_numpy=return_numpy)
+    def encode(self, texts: list[str], return_numpy=False, show_progress=True):
+        return self.embed_batch(texts, return_numpy=return_numpy, show_progress=show_progress)
     
     def __call__(self, texts: list[str], return_numpy=False):
         if isinstance(texts, str):
