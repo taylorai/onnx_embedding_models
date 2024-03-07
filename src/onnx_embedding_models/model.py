@@ -55,19 +55,32 @@ class EmbeddingModelBase(abc.ABC):
         """
         Downloads a model from the pre-selected registry and returns an instance.
         """
-        destination = tempfile.mkdtemp() if destination is None else destination
-        # check if already exists in destination
-        if not os.path.exists(os.path.join(destination, "model.onnx")):
-            cls.download_from_registry(model_id, destination)
-        return cls(
-            os.path.join(destination, "model.onnx"),
-            destination,
-            max_length=registry[model_id]["max_length"],
-            pooling_strategy=registry[model_id]["pooling_strategy"],
-            normalize=normalize,
-            intra_op_num_threads=intra_op_num_threads,
-            thread_spinning=thread_spinning,
-        )
+        if destination is not None:
+            os.makedirs(destination, exist_ok=True)
+            if not os.path.exists(os.path.join(destination, "model.onnx")):
+                cls.download_from_registry(model_id, destination)
+                instance = cls(
+                    os.path.join(destination, "model.onnx"),
+                    destination,
+                    max_length=registry[model_id]["max_length"],
+                    pooling_strategy=registry[model_id]["pooling_strategy"],
+                    normalize=normalize,
+                    intra_op_num_threads=intra_op_num_threads,
+                    thread_spinning=thread_spinning,
+                )
+        else:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                cls.download_from_registry(model_id, tmpdir)
+                instance = cls(
+                    os.path.join(tmpdir, "model.onnx"),
+                    tmpdir,
+                    max_length=registry[model_id]["max_length"],
+                    pooling_strategy=registry[model_id]["pooling_strategy"],
+                    normalize=normalize,
+                    intra_op_num_threads=intra_op_num_threads,
+                    thread_spinning=thread_spinning,
+                )
+        return instance
 
 
     @staticmethod
