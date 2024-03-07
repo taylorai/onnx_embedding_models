@@ -1,21 +1,23 @@
 import os
+import abc
 import tqdm
 import shutil
 import tempfile
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 import numpy as np
+from scipy.sparse import csr_matrix
 
-from .registry import registry
+from .registry import registry, splade_registry
 
 
-class EmbeddingModel:
+class EmbeddingModelBase(abc.ABC):
     def __init__(
         self,
         onnx_path: str,
         tokenizer_path: str,
         max_length: int,
-        pooling_strategy: Literal["mean", "first", "cls"],
+        pooling_strategy: Literal["mean", "first", "cls", "max", None],
         normalize: bool,
         intra_op_num_threads: int = 0,
         thread_spinning: bool = True,
@@ -106,6 +108,39 @@ class EmbeddingModel:
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_repo)
         tokenizer.save_pretrained(destination)
 
+    @staticmethod
+    def dict_slice(d, idx):
+        """
+        Slice a dictionary of jagged arrays, returning a dictionary of singleton numpy arrays.
+        """
+        return {k: np.array(v[idx]).reshape(1, -1) for k, v in d.items()}
+    
+    def _forward_one(
+        self,
+        inputs: dict[str, np.ndarray]
+    ):
+        outputs = self.session.run(None, inputs)
+        if len(outputs) == 2:
+            hidden_states, pooler_output = outputs
+        else:
+            hidden_states, pooler_output = outputs[0], None
+        return hidden_states, pooler_output
+
+    def _forward_batch(
+        self,
+        inputs: dict[str, list[list[int]]],
+        show_progress: bool = True,
+    ):
+        hidden_states_list = []
+        pooler_output_list = []
+        num_inputs = inputs["input_ids"].shape[0]
+        for i in tqdm.tqdm(range(num_inputs), disable=not show_progress):
+            hidden_states, pooler_output = self._forward_one(self.dict_slice(inputs, i))
+            hidden_states_list.append(hidden_states)
+            pooler_output_list.append(pooler_output)
+
+        return hidden_states_list, pooler_output_list
+
     def _pool(
         self,
         last_hidden_state: np.ndarray,  # B, L, D
@@ -119,6 +154,10 @@ class EmbeddingModel:
             pooled = np.sum(
                 last_hidden_state * np.expand_dims(mask, -1), axis=1
             ) / np.sum(mask, axis=-1, keepdims=True)
+        if self.pooling_strategy == "max":
+            pooled = np.max(
+                last_hidden_state + (1 - np.expand_dims(mask, -1)) * -1e6, axis=1
+            )
         elif self.pooling_strategy == "first":
             pooled = last_hidden_state[:, 0, :]
         elif self.pooling_strategy == "cls":
@@ -136,30 +175,23 @@ class EmbeddingModel:
 
         return pooled
 
-    def embed(
-        self, 
-        text: str,
-        return_numpy: bool = False,
+    def encode(
+        self,
+        texts: list[str],
+        return_numpy=False,
+        show_progress=True,
+        **kwargs,
     ):
-        inputs = self.tokenizer(
-            text,
-            truncation=True,
-            padding="longest",
-            max_length=self.max_length,
-            return_tensors="np",
-        )
-        outputs = self.session.run(None, {k: v for k, v in inputs.items()})
-        if len(outputs) == 2:
-            hidden_states, pooler_output = outputs
-        else:
-            hidden_states, pooler_output = outputs[0], None
+        pass
+    
+    def __call__(self, texts: list[str], return_numpy=False, show_progress=True, **kwargs):
+        if isinstance(texts, str):
+            return self.encode([texts], return_numpy=return_numpy, show_progress=show_progress, **kwargs)[0]
+        elif isinstance(texts, list):
+            return self.encode(texts, return_numpy=return_numpy, show_progress=show_progress, **kwargs)
 
-        emb = self._pool(hidden_states, pooler_output).flatten()
-        if return_numpy:
-            return emb
-        return emb.tolist()
-
-    def embed_batch(
+class EmbeddingModel(EmbeddingModelBase):
+    def encode(
         self,
         texts: list[str],
         return_numpy: bool = False,
@@ -171,30 +203,62 @@ class EmbeddingModel:
             padding=False,
             max_length=self.max_length,
         ) # dont return tensors, this adds unnecessary padding
-        output_embs = []
-        for i in tqdm.tqdm(range(len(texts)), disable=not show_progress):
-            outputs = self.session.run(None, {k: np.array(v[i]).reshape(1, -1) for k, v in inputs.items()})
-            if len(outputs) == 2:
-                hidden_states, pooler_output = outputs
-            else:
-                hidden_states, pooler_output = outputs[0], None
-
-            emb = self._pool(hidden_states, pooler_output).flatten()
-            output_embs.append(emb.tolist())
-
+        hidden_states_list, pooler_output_list = self._forward_batch(inputs, show_progress=show_progress)
+        output_embs = [
+            self._pool(hidden_states, pooler_output).flatten()
+            for hidden_states, pooler_output in zip(hidden_states_list, pooler_output_list)
+        ]
         if return_numpy:
             return np.array(output_embs)
-        
         return output_embs
-    
-    def encode(self, texts: list[str], return_numpy=False, show_progress=True):
-        return self.embed_batch(texts, return_numpy=return_numpy, show_progress=show_progress)
-    
-    def __call__(self, texts: list[str], return_numpy=False):
-        if isinstance(texts, str):
-            return self.embed(texts, return_numpy=return_numpy)
-        elif isinstance(texts, list):
-            return self.embed_batch(texts, return_numpy=return_numpy)
 
-        
 ONNXEmbeddingModel = EmbeddingModel
+
+class SpladeModel(EmbeddingModelBase):
+
+    @staticmethod
+    def _create_sparse_embedding(
+        activations: np.ndarray,
+        max_dims: int,
+    ):
+        topk_indices = np.argsort(activations, axis=-1)[:, -max_dims:] # B, D
+        B, V = topk_indices.shape
+        sparse_embeddings = np.zeros((B, V), dtype=np.float32)
+        for i in range(B):
+            sparse_embeddings[i, topk_indices[i]] = activations[i, topk_indices[i]]
+
+        return sparse_embeddings
+    
+    def encode(
+        self,
+        texts: list[str],
+        return_numpy: bool = True,
+        show_progress: bool = True,
+        max_dims: Union[int, str] = "auto",
+        return_sparse: bool = False,
+    ):
+        if return_numpy and return_sparse:
+            raise ValueError("Can't return both numpy and sparse embeddings")
+        inputs = self.tokenizer(
+            texts,
+            truncation=True,
+            padding=False,
+            max_length=self.max_length,
+        ) # dont return tensors, this adds unnecessary padding
+        hidden_states_list, _ = self._forward_batch(inputs, show_progress=show_progress)
+        # relu + max pool
+        sparse_activations = np.array([
+            self._pool(np.maximum(hidden_states, 0)).flatten()
+            for hidden_states in hidden_states_list
+        ]) # B, V
+
+        # topk
+        max_dims = self.max_length if max_dims == "auto" else max_dims
+        sparse_embs = self._create_sparse_embedding(sparse_activations, max_dims)
+
+        # Select top-k activations
+        if return_numpy:
+            return sparse_embs
+        elif return_sparse:
+            return csr_matrix(sparse_embs)
+        return sparse_embs.tolist()
