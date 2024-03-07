@@ -145,12 +145,50 @@ class EmbeddingModelBase(abc.ABC):
         self,
         inputs: dict[str, list[list[int]]],
         show_progress: bool = True,
+        chunk_size: Optional[int] = None,
     ):
         hidden_states_list = []
         pooler_output_list = []
         num_inputs = len(inputs["input_ids"])
         for i in tqdm.tqdm(range(num_inputs), disable=not show_progress):
-            hidden_states, pooler_output = self._forward_one(self.dict_slice(inputs, i))
+            # hidden_states, pooler_output = self._forward_one(self.dict_slice(inputs, i))
+            # hidden_states_list.append(hidden_states)
+            # pooler_output_list.append(pooler_output)
+            if chunk_size is not None:
+                input_ids = inputs["input_ids"][i]
+                attention_mask = inputs["attention_mask"][i]
+                token_type_ids = inputs["token_type_ids"][i] if "token_type_ids" in inputs else None
+                input_ids_chunks = [
+                    input_ids[i : i + chunk_size] for i in range(0, len(input_ids), chunk_size)
+                ]
+                attention_mask_chunks = [
+                    attention_mask[i : i + chunk_size]
+                    for i in range(0, len(attention_mask), chunk_size)
+                ]
+                if token_type_ids is not None:
+                    token_type_ids_chunks = [
+                        token_type_ids[i : i + chunk_size]
+                        for i in range(0, len(token_type_ids), chunk_size)
+                    ]
+                else:
+                    token_type_ids_chunks = [None] * len(input_ids_chunks)
+
+                hidden_states_chunks = []
+                for chunk_ids, chunk_mask, chunk_ttids in zip(input_ids_chunks, attention_mask_chunks, token_type_ids_chunks):
+                    chunk_inputs = {
+                        "input_ids": np.array([chunk_ids]),
+                        "attention_mask": np.array([chunk_mask]),
+                    }
+                    if chunk_ttids is not None:
+                        chunk_inputs["token_type_ids"] = np.array([chunk_ttids])
+                    hidden_states_chunk, pooler_output_chunk = self._forward_one(chunk_inputs)
+                    hidden_states_chunks.append(hidden_states_chunk) # B, chunk_size, D
+
+                hidden_states = np.concatenate(hidden_states_chunks, axis=1)
+                pooler_output = None # can't aggregate pooler_output for chunked
+            else:
+                hidden_states, pooler_output = self._forward_one(self.dict_slice(inputs, i))
+            
             hidden_states_list.append(hidden_states)
             pooler_output_list.append(pooler_output)
 
@@ -251,6 +289,7 @@ class SpladeModel(EmbeddingModelBase):
         show_progress: bool = True,
         max_dims: Union[int, str] = "auto",
         return_sparse: bool = False,
+        chunk_size: Optional[int] = None,
     ):
         if return_numpy and return_sparse:
             raise ValueError("Can't return both numpy and sparse embeddings")
@@ -260,7 +299,7 @@ class SpladeModel(EmbeddingModelBase):
             padding=False,
             max_length=self.max_length,
         ) # dont return tensors, this adds unnecessary padding
-        hidden_states_list, _ = self._forward_batch(inputs, show_progress=show_progress)
+        hidden_states_list, _ = self._forward_batch(inputs, show_progress=show_progress, chunk_size=chunk_size)
         # relu + max pool
         sparse_activations = np.array([
             self._pool(np.maximum(hidden_states, 0)).flatten()
