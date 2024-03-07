@@ -223,8 +223,8 @@ class SpladeModel(EmbeddingModelBase):
         activations: np.ndarray,
         max_dims: int,
     ):
-        topk_indices = np.argsort(activations, axis=-1)[:, -max_dims:] # B, D
         B, V = topk_indices.shape
+        topk_indices = np.argsort(activations, axis=-1)[:, -max_dims:] # B, max_dims
         sparse_embeddings = np.zeros((B, V), dtype=np.float32)
         for i in range(B):
             sparse_embeddings[i, topk_indices[i]] = activations[i, topk_indices[i]]
