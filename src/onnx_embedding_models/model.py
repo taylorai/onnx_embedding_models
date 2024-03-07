@@ -56,7 +56,9 @@ class EmbeddingModelBase(abc.ABC):
         Downloads a model from the pre-selected registry and returns an instance.
         """
         destination = tempfile.mkdtemp() if destination is None else destination
-        cls.download_from_registry(model_id, destination)
+        # check if already exists in destination
+        if not os.path.exists(os.path.join(destination, "model.onnx")):
+            cls.download_from_registry(model_id, destination)
         return cls(
             os.path.join(destination, "model.onnx"),
             destination,
@@ -133,7 +135,7 @@ class EmbeddingModelBase(abc.ABC):
     ):
         hidden_states_list = []
         pooler_output_list = []
-        num_inputs = inputs["input_ids"].shape[0]
+        num_inputs = len(inputs["input_ids"])
         for i in tqdm.tqdm(range(num_inputs), disable=not show_progress):
             hidden_states, pooler_output = self._forward_one(self.dict_slice(inputs, i))
             hidden_states_list.append(hidden_states)
