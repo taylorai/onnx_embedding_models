@@ -22,6 +22,14 @@ registry = {
         "pooling_strategy": "mean",
         "ndim": 384,
     },
+    "snowflake-xs": {
+        "repo": "Snowflake/snowflake-arctic-embed-xs",
+        "path_in_repo": "onnx/model_quantized.onnx",
+        "max_length": 512,
+        "pooling_strategy": "cls",
+        "normalize": True,
+        "ndim": 384,
+    },
     # 12 layers, 384-dim
     "minilm-l12": {
         "repo": "Xenova/all-MiniLM-L12-v2",

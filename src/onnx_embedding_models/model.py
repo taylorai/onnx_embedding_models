@@ -7,9 +7,7 @@ from typing import Literal, Optional, Union
 
 import numpy as np
 from scipy.sparse import csr_matrix
-
 from .registry import registry
-
 
 class EmbeddingModelBase(abc.ABC):
     def __init__(
