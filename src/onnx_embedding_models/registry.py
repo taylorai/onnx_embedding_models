@@ -45,6 +45,13 @@ registry = {
         "pooling_strategy": "first",
         "ndim": 384,
     },
+    "multilingual-e5-small": {
+        "repo": "intfloat/multilingual-e5-small",
+        "path_in_repo": "onnx/model.onnx",
+        "max_length": 512,
+        "pooling_strategy": "mean",
+        "ndim": 384,
+    },
     # 12 layers, 768-dim
     "bge-base": {
         "repo": "neuralmagic/bge-base-en-v1.5-quant",
