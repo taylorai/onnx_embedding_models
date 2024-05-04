@@ -205,7 +205,7 @@ class EmbeddingModelBase(abc.ABC):
             pooled = np.sum(
                 last_hidden_state * np.expand_dims(mask, -1), axis=1
             ) / np.sum(mask, axis=-1, keepdims=True)
-        if self.pooling_strategy == "max":
+        elif self.pooling_strategy == "max":
             pooled = np.max(
                 last_hidden_state + (1 - np.expand_dims(mask, -1)) * -1e6, axis=1
             )
