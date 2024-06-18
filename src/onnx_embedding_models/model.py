@@ -8,6 +8,7 @@ from typing import Literal, Optional, Union
 import numpy as np
 from scipy.sparse import csr_matrix
 from .registry import registry
+from .utils import dict_slice
 
 class EmbeddingModelBase(abc.ABC):
     def __init__(
@@ -120,13 +121,6 @@ class EmbeddingModelBase(abc.ABC):
             shutil.move(onnx_file, os.path.join(destination, "model.onnx"))
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_repo)
         tokenizer.save_pretrained(destination)
-
-    @staticmethod
-    def dict_slice(d, idx):
-        """
-        Slice a dictionary of jagged arrays, returning a dictionary of singleton numpy arrays.
-        """
-        return {k: np.array(v[idx]).reshape(1, -1) for k, v in d.items()}
     
     def _forward_one(
         self,
@@ -149,9 +143,6 @@ class EmbeddingModelBase(abc.ABC):
         pooler_output_list = []
         num_inputs = len(inputs["input_ids"])
         for i in tqdm.tqdm(range(num_inputs), disable=not show_progress):
-            # hidden_states, pooler_output = self._forward_one(self.dict_slice(inputs, i))
-            # hidden_states_list.append(hidden_states)
-            # pooler_output_list.append(pooler_output)
             if chunk_size is not None:
                 input_ids = inputs["input_ids"][i]
                 attention_mask = inputs["attention_mask"][i]
@@ -185,7 +176,7 @@ class EmbeddingModelBase(abc.ABC):
                 hidden_states = np.concatenate(hidden_states_chunks, axis=1)
                 pooler_output = None # can't aggregate pooler_output for chunked
             else:
-                hidden_states, pooler_output = self._forward_one(self.dict_slice(inputs, i))
+                hidden_states, pooler_output = self._forward_one(dict_slice(inputs, i))
             
             hidden_states_list.append(hidden_states)
             pooler_output_list.append(pooler_output)
