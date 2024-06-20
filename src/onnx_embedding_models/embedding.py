@@ -258,7 +258,7 @@ class EmbeddingModelBase(abc.ABC):
     def encode(
         self,
         texts: list[str],
-        return_numpy=False,
+        return_numpy=True,
         show_progress=True,
         **kwargs,
     ):
@@ -274,7 +274,7 @@ class EmbeddingModel(EmbeddingModelBase):
     def encode(
         self,
         texts: list[str],
-        return_numpy: bool = False,
+        return_numpy: bool = True,
         show_progress: bool = True,
     ):
         inputs = self.tokenizer(
