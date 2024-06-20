@@ -1,4 +1,4 @@
-from .model import (
+from .embedding import (
     EmbeddingModel,
     SpladeModel
 )
