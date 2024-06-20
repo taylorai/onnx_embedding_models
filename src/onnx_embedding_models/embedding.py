@@ -1,4 +1,5 @@
 import os
+import json
 import abc
 import tqdm
 import shutil
@@ -6,9 +7,10 @@ import tempfile
 from typing import Literal, Optional, Union
 
 import numpy as np
+from huggingface_hub import snapshot_download
 from scipy.sparse import csr_matrix
 from .registry import registry
-from .utils import dict_slice
+from .utils import dict_slice, find_onnx_model
 
 class EmbeddingModelBase(abc.ABC):
     def __init__(
@@ -80,6 +82,42 @@ class EmbeddingModelBase(abc.ABC):
                     thread_spinning=thread_spinning,
                 )
         return instance
+
+    @classmethod
+    def from_pretrained(cls, model_name_or_path: str):
+        if os.path.exists(model_name_or_path):
+            model_path = model_name_or_path
+        else:
+            model_path = snapshot_download(model_name_or_path, allow_patterns=["*.onnx", "*.json", "*.txt"])
+        with open(os.path.join(model_path, "config.json")) as f:
+            config = json.load(f)
+        onnx_model_path = find_onnx_model(model_path)
+        if onnx_model_path is None:
+            raise ValueError(f"Could not find an ONNX model in repo {model_name_or_path}")
+        
+        # try to load the sentence transformers pooling config
+        try:
+            st_config = json.load(open(os.path.join(model_path, "1_Pooling/config.json")))
+            if st_config["pooling_mode_cls_token"]:
+                pooling_strategy = "first" # for mlx_embedding_models, cls refers to pooler output
+            elif st_config["pooling_mode_mean_tokens"]:
+                pooling_strategy = "mean"
+            elif st_config["pooling_mode_max_tokens"]:
+                pooling_strategy = "max"
+            else:
+                raise ValueError("Unsupported or missing pooling strategy.")
+        except FileNotFoundError:
+            print("WARNING: No sentence-transformers config found. Using CLS token for pooling.")
+            pooling_strategy = "first"
+
+        return cls(
+            onnx_model_path,
+            model_path,
+            max_length=config.get("max_position_embeddings", 512),
+            pooling_strategy=pooling_strategy,
+            normalize=True,
+        )
+
 
 
     @staticmethod
