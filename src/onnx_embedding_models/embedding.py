@@ -318,6 +318,7 @@ class SpladeModel(EmbeddingModelBase):
         max_dims: Union[int, str] = "auto",
         return_sparse: bool = False,
         chunk_size: Optional[int] = None,
+        **kwargs # for compatibility with MLX embedding models which accept a batch_size
     ):
         if return_numpy and return_sparse:
             raise ValueError("Can't return both numpy and sparse embeddings")
