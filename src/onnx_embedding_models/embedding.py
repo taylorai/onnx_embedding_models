@@ -276,6 +276,7 @@ class EmbeddingModel(EmbeddingModelBase):
         texts: list[str],
         return_numpy: bool = True,
         show_progress: bool = True,
+        **kwargs # for compatibility with MLX embedding models which accept a batch_size
     ):
         inputs = self.tokenizer(
             texts,

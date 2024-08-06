@@ -3,7 +3,7 @@ requires = ["setuptools", "wheel"]
 
 [project]
 name = "onnx_embedding_models"
-version="0.0.14"
+version="0.0.15"
 authors = [
     {name = "Benjamin Anderson", email = "ben@trytaylor.ai"},
 ]
@@ -18,5 +18,6 @@ dependencies = [
     "onnxruntime",
     "numpy",
     "transformers",
-    "huggingface_hub"
+    "huggingface_hub",
+    "scipy"
 ]
